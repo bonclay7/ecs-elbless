@@ -1,4 +1,4 @@
-package main
+package elbless
 
 import (
 	"fmt"
@@ -12,6 +12,7 @@ import (
 
 // TaskWrapper contains useful values from ecs describe-tasks call
 type TaskWrapper struct {
+	serviceName       string
 	container         string
 	containerInstance string
 	task              string
@@ -31,10 +32,6 @@ type Microservice struct {
 	task     TaskWrapper
 	ec2Infos EC2Wrapper
 }
-
-const clusterID = "ecs-discovery-ECSCluster-18DVGRRIKGISF"
-const serviceID = "GoodReadsApp"
-const defaultRegion = "eu-west-1"
 
 var sess = session.New()
 
@@ -94,17 +91,15 @@ func filterTasks(clusterID string, tasks []string, serviceID string) []TaskWrapp
 
 	for _, task := range tasks {
 		taskDescription := fetchTaskDescription(clusterID, task)
-		// Check for only one container
-		if strings.ToLower(*taskDescription.Containers[0].Name) == strings.ToLower(serviceID) {
-			newTaskWrapper := new(TaskWrapper)
 
-			newTaskWrapper.container = strings.Split(*taskDescription.Containers[0].ContainerArn, "/")[1]
-			newTaskWrapper.containerInstance = strings.Split(*taskDescription.ContainerInstanceArn, "/")[1]
-			newTaskWrapper.task = task
-			newTaskWrapper.hostPort = *taskDescription.Containers[0].NetworkBindings[0].HostPort
+		newTaskWrapper := new(TaskWrapper)
+		newTaskWrapper.serviceName = strings.ToLower(*taskDescription.Containers[0].Name)
+		newTaskWrapper.container = strings.Split(*taskDescription.Containers[0].ContainerArn, "/")[1]
+		newTaskWrapper.containerInstance = strings.Split(*taskDescription.ContainerInstanceArn, "/")[1]
+		newTaskWrapper.task = task
+		newTaskWrapper.hostPort = *taskDescription.Containers[0].NetworkBindings[0].HostPort
 
-			slice = append(slice, *newTaskWrapper)
-		}
+		slice = append(slice, *newTaskWrapper)
 	}
 
 	return slice
@@ -156,9 +151,9 @@ func fetchEC2Instance(instanceID string) EC2Wrapper {
 	return *newEC2Wrapper
 }
 
-func getMicroservices(clusterID string, tasks []TaskWrapper) []Microservice {
+func getMicroservices(clusterID string, tasks []TaskWrapper) (MicroservicesMap map[string][]Microservice) {
 
-	slice := make([]Microservice, 0, len(tasks))
+	MicroservicesMap = make(map[string][]Microservice)
 
 	for _, task := range tasks {
 		containerEC2InstanceID := fetchContainerInstance(clusterID, task)
@@ -168,33 +163,22 @@ func getMicroservices(clusterID string, tasks []TaskWrapper) []Microservice {
 		newMicroservice.ec2Infos = ec2Instance
 		newMicroservice.task = task
 
-		slice = append(slice, *newMicroservice)
+		MicroservicesMap[task.serviceName] = append(MicroservicesMap[task.serviceName], *newMicroservice)
 	}
 
-	return slice
+	return MicroservicesMap
 
 }
 
-func main() {
+func getServicesEndpoints(clusterID string, region string) (MicroservicesMap map[string][]Microservice) {
+
 	// Retrive all the tasks
 	tasksIDs := fetchTasksIDs(clusterID)
 
 	//Filter for tasks matching our serviceID
 	tasks := filterTasks(clusterID, tasksIDs, serviceID)
 
-	microservices := getMicroservices(clusterID, tasks)
+	microservicesMap := getMicroservices(clusterID, tasks)
 
-	fmt.Println("clusterID: ", clusterID)
-
-	for _, m := range microservices {
-		fmt.Println("  Task ID: ", m.task.task)
-		fmt.Println("  Container ID: ", m.task.container)
-		fmt.Printf("  Public endpoint: %s:%d\n", m.ec2Infos.publicIP, m.task.hostPort)
-		fmt.Printf("  Public DNS endpoint: %s:%d\n", m.ec2Infos.publicDNSName, m.task.hostPort)
-		fmt.Printf("  Private endpoint: %s:%d\n", m.ec2Infos.privateIP, m.task.hostPort)
-		fmt.Printf("  Private DNS endpoint: %s:%d\n", m.ec2Infos.privateDNSName, m.task.hostPort)
-		fmt.Println("")
-
-	}
-
+	return microservicesMap
 }
