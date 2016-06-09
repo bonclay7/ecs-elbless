@@ -1,7 +1,6 @@
 package elbless
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -170,7 +169,8 @@ func getMicroservices(clusterID string, tasks []TaskWrapper) (MicroservicesMap m
 
 }
 
-func getServicesEndpoints(clusterID string, region string) (MicroservicesMap map[string][]Microservice) {
+// GetServicesEndpoints returns ecs containers endpoints
+func GetServicesEndpoints(clusterID string, region string) (MicroservicesMap map[string][]Microservice) {
 
 	// Retrive all the tasks
 	tasksIDs := fetchTasksIDs(clusterID)
