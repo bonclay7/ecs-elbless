@@ -84,12 +84,12 @@ func fetchTaskDescription(clusterID string, taskID string, region string) *ecs.T
 	return resp.Tasks[0]
 }
 
-func filterTasks(clusterID string, tasks []string, serviceID string) []TaskWrapper {
+func filterTasks(clusterID string, tasks []string, region string) []TaskWrapper {
 
 	slice := make([]TaskWrapper, 0, len(tasks))
 
 	for _, task := range tasks {
-		taskDescription := fetchTaskDescription(clusterID, task)
+		taskDescription := fetchTaskDescription(clusterID, task, region)
 
 		newTaskWrapper := new(TaskWrapper)
 		newTaskWrapper.serviceName = strings.ToLower(*taskDescription.Containers[0].Name)
@@ -150,13 +150,13 @@ func fetchEC2Instance(instanceID string, region string) EC2Wrapper {
 	return *newEC2Wrapper
 }
 
-func getMicroservices(clusterID string, tasks []TaskWrapper) (MicroservicesMap map[string][]Microservice) {
+func getMicroservices(clusterID string, tasks []TaskWrapper, region string) (MicroservicesMap map[string][]Microservice) {
 
 	MicroservicesMap = make(map[string][]Microservice)
 
 	for _, task := range tasks {
-		containerEC2InstanceID := fetchContainerInstance(clusterID, task)
-		ec2Instance := fetchEC2Instance(containerEC2InstanceID)
+		containerEC2InstanceID := fetchContainerInstance(clusterID, task, region)
+		ec2Instance := fetchEC2Instance(containerEC2InstanceID, region)
 
 		newMicroservice := new(Microservice)
 		newMicroservice.ec2Infos = ec2Instance
@@ -173,12 +173,12 @@ func getMicroservices(clusterID string, tasks []TaskWrapper) (MicroservicesMap m
 func GetServicesEndpoints(clusterID string, region string) (MicroservicesMap map[string][]Microservice) {
 
 	// Retrive all the tasks
-	tasksIDs := fetchTasksIDs(clusterID)
+	tasksIDs := fetchTasksIDs(clusterID, region)
 
 	//Filter for tasks matching our serviceID
-	tasks := filterTasks(clusterID, tasksIDs, serviceID)
+	tasks := filterTasks(clusterID, tasksIDs, region)
 
-	microservicesMap := getMicroservices(clusterID, tasks)
+	microservicesMap := getMicroservices(clusterID, tasks, region)
 
 	return microservicesMap
 }
