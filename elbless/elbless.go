@@ -35,8 +35,8 @@ type Microservice struct {
 var sess = session.New()
 
 // Fetch from AWS tasks created for an ECS cluster
-func fetchTasksIDs(clusterID string) []string {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchTasksIDs(clusterID string, region string) []string {
+	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ecs.ListTasksInput{
 		Cluster: aws.String(clusterID),
@@ -57,8 +57,8 @@ func fetchTasksIDs(clusterID string) []string {
 	return tasksSlice
 }
 
-func fetchTaskDescription(clusterID string, taskID string) *ecs.Task {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchTaskDescription(clusterID string, taskID string, region string) *ecs.Task {
+	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ecs.DescribeTasksInput{
 		Tasks: []*string{
@@ -84,12 +84,12 @@ func fetchTaskDescription(clusterID string, taskID string) *ecs.Task {
 	return resp.Tasks[0]
 }
 
-func filterTasks(clusterID string, tasks []string, serviceID string) []TaskWrapper {
+func filterTasks(clusterID string, tasks []string, region string) []TaskWrapper {
 
 	slice := make([]TaskWrapper, 0, len(tasks))
 
 	for _, task := range tasks {
-		taskDescription := fetchTaskDescription(clusterID, task)
+		taskDescription := fetchTaskDescription(clusterID, task, region)
 
 		newTaskWrapper := new(TaskWrapper)
 		newTaskWrapper.serviceName = strings.ToLower(*taskDescription.Containers[0].Name)
@@ -104,8 +104,8 @@ func filterTasks(clusterID string, tasks []string, serviceID string) []TaskWrapp
 	return slice
 }
 
-func fetchContainerInstance(clusterID string, task TaskWrapper) string {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchContainerInstance(clusterID string, task TaskWrapper, region string) string {
+	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ecs.DescribeContainerInstancesInput{
 		ContainerInstances: []*string{ // Required
@@ -124,8 +124,8 @@ func fetchContainerInstance(clusterID string, task TaskWrapper) string {
 	return *resp.ContainerInstances[0].Ec2InstanceId
 }
 
-func fetchEC2Instance(instanceID string) EC2Wrapper {
-	svc := ec2.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchEC2Instance(instanceID string, region string) EC2Wrapper {
+	svc := ec2.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{
@@ -150,13 +150,13 @@ func fetchEC2Instance(instanceID string) EC2Wrapper {
 	return *newEC2Wrapper
 }
 
-func getMicroservices(clusterID string, tasks []TaskWrapper) (MicroservicesMap map[string][]Microservice) {
+func getMicroservices(clusterID string, tasks []TaskWrapper, region string) (MicroservicesMap map[string][]Microservice) {
 
 	MicroservicesMap = make(map[string][]Microservice)
 
 	for _, task := range tasks {
-		containerEC2InstanceID := fetchContainerInstance(clusterID, task)
-		ec2Instance := fetchEC2Instance(containerEC2InstanceID)
+		containerEC2InstanceID := fetchContainerInstance(clusterID, task, region)
+		ec2Instance := fetchEC2Instance(containerEC2InstanceID, region)
 
 		newMicroservice := new(Microservice)
 		newMicroservice.ec2Infos = ec2Instance
@@ -173,12 +173,12 @@ func getMicroservices(clusterID string, tasks []TaskWrapper) (MicroservicesMap m
 func GetServicesEndpoints(clusterID string, region string) (MicroservicesMap map[string][]Microservice) {
 
 	// Retrive all the tasks
-	tasksIDs := fetchTasksIDs(clusterID)
+	tasksIDs := fetchTasksIDs(clusterID, region)
 
 	//Filter for tasks matching our serviceID
-	tasks := filterTasks(clusterID, tasksIDs, serviceID)
+	tasks := filterTasks(clusterID, tasksIDs, region)
 
-	microservicesMap := getMicroservices(clusterID, tasks)
+	microservicesMap := getMicroservices(clusterID, tasks, region)
 
 	return microservicesMap
 }
