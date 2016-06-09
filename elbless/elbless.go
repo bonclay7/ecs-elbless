@@ -35,8 +35,8 @@ type Microservice struct {
 var sess = session.New()
 
 // Fetch from AWS tasks created for an ECS cluster
-func fetchTasksIDs(clusterID string) []string {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchTasksIDs(clusterID string, region string) []string {
+	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ecs.ListTasksInput{
 		Cluster: aws.String(clusterID),
@@ -57,8 +57,8 @@ func fetchTasksIDs(clusterID string) []string {
 	return tasksSlice
 }
 
-func fetchTaskDescription(clusterID string, taskID string) *ecs.Task {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchTaskDescription(clusterID string, taskID string, region string) *ecs.Task {
+	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ecs.DescribeTasksInput{
 		Tasks: []*string{
@@ -104,8 +104,8 @@ func filterTasks(clusterID string, tasks []string, serviceID string) []TaskWrapp
 	return slice
 }
 
-func fetchContainerInstance(clusterID string, task TaskWrapper) string {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchContainerInstance(clusterID string, task TaskWrapper, region string) string {
+	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ecs.DescribeContainerInstancesInput{
 		ContainerInstances: []*string{ // Required
@@ -124,8 +124,8 @@ func fetchContainerInstance(clusterID string, task TaskWrapper) string {
 	return *resp.ContainerInstances[0].Ec2InstanceId
 }
 
-func fetchEC2Instance(instanceID string) EC2Wrapper {
-	svc := ec2.New(sess, &aws.Config{Region: aws.String(defaultRegion)})
+func fetchEC2Instance(instanceID string, region string) EC2Wrapper {
+	svc := ec2.New(sess, &aws.Config{Region: aws.String(region)})
 
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{
