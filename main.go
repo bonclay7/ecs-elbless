@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/bonclay7/ecs-elbless/elbless"
+	//"github.com/bonclay7/ecs-elbless/elbless"
 )
 
 func main() {
@@ -35,29 +36,27 @@ func main() {
 		}
 	}
 
-	fmt.Println(elbless.GetServicesEndpoints(*cluster, *region))
-	/*
-		// Retrive all the tasks
-		tasksIDs := fetchTasksIDs(clusterID)
+	printEcsServices(*cluster, *region)
+}
 
-		//Filter for tasks matching our serviceID
-		tasks := filterTasks(clusterID, tasksIDs, serviceID)
+func printEcsServices(cluster string, region string) {
+	services := elbless.GetServicesEndpoints(cluster, region)
 
-		microservices := getMicroservices(clusterID, tasks)
+	for service, metadata := range services {
+		fmt.Println("Service : ", service)
 
-		fmt.Println("clusterID: ", clusterID)
+		for _, m := range metadata {
 
-		for _, m := range microservices {
-			fmt.Println("  Task ID: ", m.task.task)
-			fmt.Println("  Container ID: ", m.task.container)
-			fmt.Printf("  Public endpoint: %s:%d\n", m.ec2Infos.publicIP, m.task.hostPort)
-			fmt.Printf("  Public DNS endpoint: %s:%d\n", m.ec2Infos.publicDNSName, m.task.hostPort)
-			fmt.Printf("  Private endpoint: %s:%d\n", m.ec2Infos.privateIP, m.task.hostPort)
-			fmt.Printf("  Private DNS endpoint: %s:%d\n", m.ec2Infos.privateDNSName, m.task.hostPort)
+			fmt.Println("  Task ID: ", m.Task.Task)
+			fmt.Println("  Container ID: ", m.Task.Container)
+			fmt.Printf("  Public endpoint: %s:%d\n", m.Ec2Infos.PublicIP, m.Task.HostPort)
+			fmt.Printf("  Public DNS endpoint: %s:%d\n", m.Ec2Infos.PublicDNSName, m.Task.HostPort)
+			fmt.Printf("  Private endpoint: %s:%d\n", m.Ec2Infos.PrivateIP, m.Task.HostPort)
+			fmt.Printf("  Private DNS endpoint: %s:%d\n", m.Ec2Infos.PrivateDNSName, m.Task.HostPort)
 			fmt.Println("")
-
 		}
-		//*/
+	}
+
 }
 
 func printHelp() {

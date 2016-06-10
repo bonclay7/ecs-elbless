@@ -11,25 +11,25 @@ import (
 
 // TaskWrapper contains useful values from ecs describe-tasks call
 type TaskWrapper struct {
-	serviceName       string
-	container         string
-	containerInstance string
-	task              string
-	hostPort          int64
+	ServiceName       string
+	Container         string
+	ContainerInstance string
+	Task              string
+	HostPort          int64
 }
 
 // EC2Wrapper contains useful values from ec2 describe-instances call
 type EC2Wrapper struct {
-	privateIP      string
-	publicIP       string
-	privateDNSName string
-	publicDNSName  string
+	PrivateIP      string
+	PublicIP       string
+	PrivateDNSName string
+	PublicDNSName  string
 }
 
 // Microservice is a full definition of an ecs container
 type Microservice struct {
-	task     TaskWrapper
-	ec2Infos EC2Wrapper
+	Task     TaskWrapper
+	Ec2Infos EC2Wrapper
 }
 
 var sess = session.New()
@@ -91,14 +91,15 @@ func filterTasks(clusterID string, tasks []string, region string) []TaskWrapper 
 	for _, task := range tasks {
 		taskDescription := fetchTaskDescription(clusterID, task, region)
 
-		newTaskWrapper := new(TaskWrapper)
-		newTaskWrapper.serviceName = strings.ToLower(*taskDescription.Containers[0].Name)
-		newTaskWrapper.container = strings.Split(*taskDescription.Containers[0].ContainerArn, "/")[1]
-		newTaskWrapper.containerInstance = strings.Split(*taskDescription.ContainerInstanceArn, "/")[1]
-		newTaskWrapper.task = task
-		newTaskWrapper.hostPort = *taskDescription.Containers[0].NetworkBindings[0].HostPort
+		newTaskWrapper := TaskWrapper{
+			HostPort:          *taskDescription.Containers[0].NetworkBindings[0].HostPort,
+			Container:         strings.Split(*taskDescription.Containers[0].ContainerArn, "/")[1],
+			ContainerInstance: strings.Split(*taskDescription.ContainerInstanceArn, "/")[1],
+			ServiceName:       strings.ToLower(*taskDescription.Containers[0].Name),
+			Task:              task,
+		}
 
-		slice = append(slice, *newTaskWrapper)
+		slice = append(slice, newTaskWrapper)
 	}
 
 	return slice
@@ -109,7 +110,7 @@ func fetchContainerInstance(clusterID string, task TaskWrapper, region string) s
 
 	params := &ecs.DescribeContainerInstancesInput{
 		ContainerInstances: []*string{ // Required
-			aws.String(task.containerInstance), // Required
+			aws.String(task.ContainerInstance), // Required
 			// More values...
 		},
 		Cluster: aws.String(clusterID),
@@ -140,14 +141,14 @@ func fetchEC2Instance(instanceID string, region string) EC2Wrapper {
 		panic(err)
 	}
 
-	newEC2Wrapper := new(EC2Wrapper)
+	newEC2Wrapper := EC2Wrapper{
+		PrivateDNSName: *resp.Reservations[0].Instances[0].PrivateDnsName,
+		PrivateIP:      *resp.Reservations[0].Instances[0].PrivateIpAddress,
+		PublicDNSName:  *resp.Reservations[0].Instances[0].PublicDnsName,
+		PublicIP:       *resp.Reservations[0].Instances[0].PublicIpAddress,
+	}
 
-	newEC2Wrapper.privateDNSName = *resp.Reservations[0].Instances[0].PrivateDnsName
-	newEC2Wrapper.publicDNSName = *resp.Reservations[0].Instances[0].PublicDnsName
-	newEC2Wrapper.privateIP = *resp.Reservations[0].Instances[0].PrivateIpAddress
-	newEC2Wrapper.publicIP = *resp.Reservations[0].Instances[0].PublicIpAddress
-
-	return *newEC2Wrapper
+	return newEC2Wrapper
 }
 
 func getMicroservices(clusterID string, tasks []TaskWrapper, region string) (MicroservicesMap map[string][]Microservice) {
@@ -158,11 +159,12 @@ func getMicroservices(clusterID string, tasks []TaskWrapper, region string) (Mic
 		containerEC2InstanceID := fetchContainerInstance(clusterID, task, region)
 		ec2Instance := fetchEC2Instance(containerEC2InstanceID, region)
 
-		newMicroservice := new(Microservice)
-		newMicroservice.ec2Infos = ec2Instance
-		newMicroservice.task = task
+		newMicroservice := Microservice{
+			Ec2Infos: ec2Instance,
+			Task:     task,
+		}
 
-		MicroservicesMap[task.serviceName] = append(MicroservicesMap[task.serviceName], *newMicroservice)
+		MicroservicesMap[task.ServiceName] = append(MicroservicesMap[task.ServiceName], newMicroservice)
 	}
 
 	return MicroservicesMap
