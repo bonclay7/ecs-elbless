@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/bonclay7/ecs-elbless/elbless"
-	//"github.com/bonclay7/ecs-elbless/elbless"
 )
 
 func main() {
@@ -16,7 +15,7 @@ func main() {
 	serviceFilter := flag.String("service-filter", "*", "ECS service id [optional]")
 
 	flag.Usage = func() {
-		fmt.Printf("usage: ecs-elbless --cluster <cluster-id> [--service-filter filter-exp] [--region us-west-1]\n\n")
+		fmt.Printf("usage: ecs-elbless -cluster <cluster-id> [-service-filter 'filter-exp'] [-region us-west-1]\n\n")
 		flag.PrintDefaults()
 	}
 
@@ -31,7 +30,7 @@ func main() {
 	if *region == "" {
 		*region = os.Getenv("AWS_DEFAULT_REGION")
 		if *region == "" {
-			fmt.Printf("Error: missing --region option and AWS_DEFAULT_REGION \n\n")
+			fmt.Printf("Error: missing -region option and AWS_DEFAULT_REGION \n\n")
 			os.Exit(1)
 		}
 	}
@@ -57,11 +56,4 @@ func printEcsServices(cluster string, region string, filter string) {
 		}
 	}
 
-}
-
-func printHelp() {
-	fmt.Println("usage: ecs-elbless --cluster <cluster-id> [--service-filter filter-exp] [--region us-west-1]")
-	fmt.Println("  --cluster, -c    : ECS Cluster ID")
-	fmt.Println("  --service-filter, -s 		: ECS Service ID")
-	fmt.Println("  --region, -r     : AWS region : optional")
 }
