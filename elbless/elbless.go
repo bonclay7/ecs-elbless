@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/gobwas/glob"
 )
 
 // TaskWrapper contains useful values from ecs describe-tasks call
@@ -84,22 +85,26 @@ func fetchTaskDescription(clusterID string, taskID string, region string) *ecs.T
 	return resp.Tasks[0]
 }
 
-func filterTasks(clusterID string, tasks []string, region string) []TaskWrapper {
+func filterTasks(clusterID string, tasks []string, region string, filter string) []TaskWrapper {
+
+	var g glob.Glob
 
 	slice := make([]TaskWrapper, 0, len(tasks))
+	g = glob.MustCompile(strings.ToLower(filter))
 
 	for _, task := range tasks {
 		taskDescription := fetchTaskDescription(clusterID, task, region)
+		if g.Match(strings.ToLower(*taskDescription.Containers[0].Name)) {
+			newTaskWrapper := TaskWrapper{
+				HostPort:          *taskDescription.Containers[0].NetworkBindings[0].HostPort,
+				Container:         strings.Split(*taskDescription.Containers[0].ContainerArn, "/")[1],
+				ContainerInstance: strings.Split(*taskDescription.ContainerInstanceArn, "/")[1],
+				ServiceName:       strings.ToLower(*taskDescription.Containers[0].Name),
+				Task:              task,
+			}
 
-		newTaskWrapper := TaskWrapper{
-			HostPort:          *taskDescription.Containers[0].NetworkBindings[0].HostPort,
-			Container:         strings.Split(*taskDescription.Containers[0].ContainerArn, "/")[1],
-			ContainerInstance: strings.Split(*taskDescription.ContainerInstanceArn, "/")[1],
-			ServiceName:       strings.ToLower(*taskDescription.Containers[0].Name),
-			Task:              task,
+			slice = append(slice, newTaskWrapper)
 		}
-
-		slice = append(slice, newTaskWrapper)
 	}
 
 	return slice
@@ -172,13 +177,13 @@ func getMicroservices(clusterID string, tasks []TaskWrapper, region string) (Mic
 }
 
 // GetServicesEndpoints returns ecs containers endpoints
-func GetServicesEndpoints(clusterID string, region string) (MicroservicesMap map[string][]Microservice) {
+func GetServicesEndpoints(clusterID string, region string, filter string) (MicroservicesMap map[string][]Microservice) {
 
 	// Retrive all the tasks
 	tasksIDs := fetchTasksIDs(clusterID, region)
 
 	//Filter for tasks matching our serviceID
-	tasks := filterTasks(clusterID, tasksIDs, region)
+	tasks := filterTasks(clusterID, tasksIDs, region, filter)
 
 	microservicesMap := getMicroservices(clusterID, tasks, region)
 

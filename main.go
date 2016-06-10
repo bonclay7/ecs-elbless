@@ -13,7 +13,7 @@ func main() {
 
 	cluster := flag.String("cluster", "", "ECS Cluster ID [mandatory]")
 	region := flag.String("region", "", "AWS_DEFAULT_REGION [optional]")
-	//serviceFilter := flag.String("service-filter", "", "ECS service id [optional]")
+	serviceFilter := flag.String("service-filter", "*", "ECS service id [optional]")
 
 	flag.Usage = func() {
 		fmt.Printf("usage: ecs-elbless --cluster <cluster-id> [--service-filter filter-exp] [--region us-west-1]\n\n")
@@ -36,11 +36,11 @@ func main() {
 		}
 	}
 
-	printEcsServices(*cluster, *region)
+	printEcsServices(*cluster, *region, *serviceFilter)
 }
 
-func printEcsServices(cluster string, region string) {
-	services := elbless.GetServicesEndpoints(cluster, region)
+func printEcsServices(cluster string, region string, filter string) {
+	services := elbless.GetServicesEndpoints(cluster, region, filter)
 
 	for service, metadata := range services {
 		fmt.Println("Service : ", service)
