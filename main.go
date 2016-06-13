@@ -3,10 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/bonclay7/ecs-elbless/elbless"
 )
+
+func init() {
+	// Change the device for logging to stdout.
+	log.SetOutput(os.Stdout)
+}
 
 func main() {
 
@@ -22,16 +28,14 @@ func main() {
 	flag.Parse()
 
 	if *cluster == "" {
-		fmt.Printf("Error: missing cluster id. To get help, use [--help | -h] option.\n\n")
-		os.Exit(1)
+		log.Fatal("Error: missing cluster id. To get help, use [--help | -h] option.\n\n")
 	}
 
 	// get region from AWS_DEFAULT_REGION
 	if *region == "" {
 		*region = os.Getenv("AWS_DEFAULT_REGION")
 		if *region == "" {
-			fmt.Printf("Error: missing -region option and AWS_DEFAULT_REGION \n\n")
-			os.Exit(1)
+			log.Fatal("Error: missing -region option and AWS_DEFAULT_REGION \n\n")
 		}
 	}
 
