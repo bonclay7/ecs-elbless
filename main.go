@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	//"./elbless"
 	"github.com/bonclay7/ecs-elbless/elbless"
 )
 
@@ -43,7 +44,17 @@ func main() {
 }
 
 func printEcsServices(cluster string, region string, filter string) {
-	services := elbless.GetServicesEndpoints(cluster, region, filter)
+	services, err := elbless.GetServicesEndpoints(cluster, region, filter)
+
+	if err != nil {
+		log.Println("here")
+		log.Fatal(err)
+	}
+
+	if len(services) == 0 {
+		log.Println(filter, ": service-filter not found")
+		os.Exit(0)
+	}
 
 	for service, metadata := range services {
 		fmt.Println("Service : ", service)
