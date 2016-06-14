@@ -3,6 +3,7 @@ package elbless
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -34,17 +35,38 @@ type Microservice struct {
 	Ec2Infos EC2Wrapper
 }
 
-var sess = session.New()
+//AWSClient contais connections for AWS used services
+type AWSClient struct {
+	ec2conn *ec2.EC2
+	ecsconn *ecs.ECS
+}
+
+//struct to build the map of microservces after
+type mapHelper struct {
+	serviceName  string
+	microservice Microservice
+}
+
+var client AWSClient
+
+// create sessions for aws sdk
+func (c *AWSClient) initialize(region string) AWSClient {
+	var sess = session.New()
+
+	return AWSClient{
+		ecsconn: ecs.New(sess, &aws.Config{Region: aws.String(region)}),
+		ec2conn: ec2.New(sess, &aws.Config{Region: aws.String(region)}),
+	}
+}
 
 // Fetch from AWS tasks created for an ECS cluster
-func fetchTasksIDs(clusterID string, region string) ([]string, error) {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
+func fetchTasksIDs(clusterID string) ([]string, error) {
 
 	params := &ecs.ListTasksInput{
 		Cluster: aws.String(clusterID),
 	}
 
-	resp, err := svc.ListTasks(params)
+	resp, err := client.ecsconn.ListTasks(params)
 
 	if err != nil {
 		return nil, err
@@ -59,8 +81,7 @@ func fetchTasksIDs(clusterID string, region string) ([]string, error) {
 	return tasksSlice, nil
 }
 
-func fetchTaskDescription(clusterID string, taskID string, region string) (*ecs.Task, error) {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
+func fetchTaskDescription(clusterID string, taskID string) (*ecs.Task, error) {
 
 	params := &ecs.DescribeTasksInput{
 		Tasks: []*string{
@@ -69,7 +90,7 @@ func fetchTaskDescription(clusterID string, taskID string, region string) (*ecs.
 		Cluster: aws.String(clusterID),
 	}
 
-	resp, err := svc.DescribeTasks(params)
+	resp, err := client.ecsconn.DescribeTasks(params)
 
 	if err != nil {
 		return nil, err
@@ -88,7 +109,7 @@ func fetchTaskDescription(clusterID string, taskID string, region string) (*ecs.
 	return resp.Tasks[0], nil
 }
 
-func filterTasks(clusterID string, tasks []string, region string, filter string) ([]TaskWrapper, error) {
+func filterTasks(clusterID string, tasks []string, filter string) ([]TaskWrapper, error) {
 
 	var g glob.Glob
 
@@ -96,7 +117,7 @@ func filterTasks(clusterID string, tasks []string, region string, filter string)
 	g = glob.MustCompile(strings.ToLower(filter))
 
 	for _, task := range tasks {
-		taskDescription, _ := fetchTaskDescription(clusterID, task, region)
+		taskDescription, _ := fetchTaskDescription(clusterID, task)
 
 		if g.Match(strings.ToLower(*taskDescription.Containers[0].Name)) {
 			newTaskWrapper := TaskWrapper{
@@ -114,8 +135,7 @@ func filterTasks(clusterID string, tasks []string, region string, filter string)
 	return slice, nil
 }
 
-func fetchContainerInstance(clusterID string, task TaskWrapper, region string) (string, error) {
-	svc := ecs.New(sess, &aws.Config{Region: aws.String(region)})
+func fetchContainerInstance(clusterID string, task TaskWrapper) (string, error) {
 
 	params := &ecs.DescribeContainerInstancesInput{
 		ContainerInstances: []*string{ // Required
@@ -125,7 +145,7 @@ func fetchContainerInstance(clusterID string, task TaskWrapper, region string) (
 		Cluster: aws.String(clusterID),
 	}
 
-	resp, err := svc.DescribeContainerInstances(params)
+	resp, err := client.ecsconn.DescribeContainerInstances(params)
 
 	if err != nil {
 		return "", err
@@ -134,8 +154,7 @@ func fetchContainerInstance(clusterID string, task TaskWrapper, region string) (
 	return *resp.ContainerInstances[0].Ec2InstanceId, nil
 }
 
-func fetchEC2Instance(instanceID string, region string) (EC2Wrapper, error) {
-	svc := ec2.New(sess, &aws.Config{Region: aws.String(region)})
+func fetchEC2Instance(instanceID string) (EC2Wrapper, error) {
 
 	params := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{
@@ -144,7 +163,7 @@ func fetchEC2Instance(instanceID string, region string) (EC2Wrapper, error) {
 		},
 	}
 
-	resp, err := svc.DescribeInstances(params)
+	resp, err := client.ec2conn.DescribeInstances(params)
 
 	if err != nil {
 		return EC2Wrapper{}, err
@@ -160,51 +179,69 @@ func fetchEC2Instance(instanceID string, region string) (EC2Wrapper, error) {
 	return newEC2Wrapper, nil
 }
 
-func getMicroservices(clusterID string, tasks []TaskWrapper, region string) (map[string][]Microservice, error) {
+func makeMapping(clusterID string, task TaskWrapper, queue chan mapHelper, wg *sync.WaitGroup) {
+	// Tell go routine has finish after function execution
+	defer wg.Done()
 
-	microservicesMap := make(map[string][]Microservice)
+	containerEC2InstanceID, _ := fetchContainerInstance(clusterID, task)
+	ec2Instance, _ := fetchEC2Instance(containerEC2InstanceID)
+
+	queue <- mapHelper{task.ServiceName, Microservice{
+		Ec2Infos: ec2Instance,
+		Task:     task,
+	}}
+
+}
+
+func getMicroservices(clusterID string, tasks []TaskWrapper) (map[string][]Microservice, error) {
+
+	// wait group for the goroutines we fire
+	var wg sync.WaitGroup
+	wg.Add(len(tasks))
+
+	// channel fo goroutines to submit their work result
+	queue := make(chan mapHelper)
 
 	for _, task := range tasks {
-		containerEC2InstanceID, err := fetchContainerInstance(clusterID, task, region)
-
-		if err != nil {
-			return nil, err
-		}
-
-		ec2Instance, err := fetchEC2Instance(containerEC2InstanceID, region)
-
-		if err != nil {
-			return nil, err
-		}
-
-		newMicroservice := Microservice{
-			Ec2Infos: ec2Instance,
-			Task:     task,
-		}
-		microservicesMap[task.ServiceName] = append(microservicesMap[task.ServiceName], newMicroservice)
+		// fire goroutines
+		go makeMapping(clusterID, task, queue, &wg)
 	}
 
-	return microservicesMap, nil
+	// wait for the goroutines to finish and close the channel
+	go func() {
+		wg.Wait()
+		close(queue)
+	}()
+
+	// final map for microservices
+	mMap := make(map[string][]Microservice)
+
+	for mHelper := range queue {
+		mMap[mHelper.serviceName] = append(mMap[mHelper.serviceName], mHelper.microservice)
+	}
+	return mMap, nil
 }
 
 // GetServicesEndpoints returns ecs containers endpoints
 func GetServicesEndpoints(clusterID string, region string, filter string) (map[string][]Microservice, error) {
+	// initialize connection to aws with config
+	client = client.initialize(region)
 
 	// Retrive all the tasks
-	tasksIDs, err := fetchTasksIDs(clusterID, region)
+	tasksIDs, err := fetchTasksIDs(clusterID)
 
 	if err != nil {
 		return nil, err
 	}
 
 	//Filter for tasks matching our serviceID
-	tasks, err := filterTasks(clusterID, tasksIDs, region, filter)
+	tasks, err := filterTasks(clusterID, tasksIDs, filter)
 
 	if err != nil {
 		return nil, err
 	}
 
-	microservicesMap, err := getMicroservices(clusterID, tasks, region)
+	microservicesMap, err := getMicroservices(clusterID, tasks)
 
 	if err != nil {
 		return nil, err
