@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/gobwas/glob"
@@ -35,29 +34,15 @@ type Microservice struct {
 	Ec2Infos EC2Wrapper
 }
 
-//AWSClient contais connections for AWS used services
-type AWSClient struct {
-	ec2conn *ec2.EC2
-	ecsconn *ecs.ECS
-}
-
 //struct to build the map of microservces after
 type mapHelper struct {
 	serviceName  string
 	microservice Microservice
 }
 
-var client AWSClient
-
-// create sessions for aws sdk
-func (c *AWSClient) initialize(region string) AWSClient {
-	var sess = session.New()
-
-	return AWSClient{
-		ecsconn: ecs.New(sess, &aws.Config{Region: aws.String(region)}),
-		ec2conn: ec2.New(sess, &aws.Config{Region: aws.String(region)}),
-	}
-}
+//aws clis
+var ecscli = AWSECSClient{nil}
+var ec2cli = AWSEC2Client{nil}
 
 // Fetch from AWS tasks created for an ECS cluster
 func fetchTasksIDs(clusterID string) ([]string, error) {
@@ -66,7 +51,7 @@ func fetchTasksIDs(clusterID string) ([]string, error) {
 		Cluster: aws.String(clusterID),
 	}
 
-	resp, err := client.ecsconn.ListTasks(params)
+	resp, err := ecscli.ListTasks(params)
 
 	if err != nil {
 		return nil, err
@@ -90,7 +75,7 @@ func fetchTaskDescription(clusterID string, taskID string) (*ecs.Task, error) {
 		Cluster: aws.String(clusterID),
 	}
 
-	resp, err := client.ecsconn.DescribeTasks(params)
+	resp, err := ecscli.DescribeTasks(params)
 
 	if err != nil {
 		return nil, err
@@ -145,7 +130,7 @@ func fetchContainerInstance(clusterID string, task TaskWrapper) (string, error) 
 		Cluster: aws.String(clusterID),
 	}
 
-	resp, err := client.ecsconn.DescribeContainerInstances(params)
+	resp, err := ecscli.DescribeContainerInstances(params)
 
 	if err != nil {
 		return "", err
@@ -163,7 +148,7 @@ func fetchEC2Instance(instanceID string) (EC2Wrapper, error) {
 		},
 	}
 
-	resp, err := client.ec2conn.DescribeInstances(params)
+	resp, err := ec2cli.DescribeInstances(params)
 
 	if err != nil {
 		return EC2Wrapper{}, err
@@ -224,8 +209,9 @@ func getMicroservices(clusterID string, tasks []TaskWrapper) (map[string][]Micro
 
 // GetServicesEndpoints returns ecs containers endpoints
 func GetServicesEndpoints(clusterID string, region string, filter string) (map[string][]Microservice, error) {
-	// initialize connection to aws with config
-	client = client.initialize(region)
+	// initialize connection to aws with region config
+	ecscli = ecscli.Initialize(region)
+	ec2cli = ec2cli.Initialize(region)
 
 	// Retrive all the tasks
 	tasksIDs, err := fetchTasksIDs(clusterID)
