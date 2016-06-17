@@ -45,7 +45,7 @@ var ecscli = AWSECSClient{nil}
 var ec2cli = AWSEC2Client{nil}
 
 // Fetch from AWS tasks created for an ECS cluster
-func fetchTasksIDs(clusterID string) ([]string, error) {
+func fetchTasksIDs(clusterID string, ecscli AWSECS) ([]string, error) {
 
 	params := &ecs.ListTasksInput{
 		Cluster: aws.String(clusterID),
@@ -214,7 +214,7 @@ func GetServicesEndpoints(clusterID string, region string, filter string) (map[s
 	ec2cli = ec2cli.Initialize(region)
 
 	// Retrive all the tasks
-	tasksIDs, err := fetchTasksIDs(clusterID)
+	tasksIDs, err := fetchTasksIDs(clusterID, &ecscli)
 
 	if err != nil {
 		return nil, err

@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	//"./elbless"
-	"github.com/bonclay7/ecs-elbless/elbless"
+	"./elbless"
+	//"github.com/bonclay7/ecs-elbless/elbless"
 )
 
 func init() {
